@@ -19,7 +19,8 @@ function FloatingBubbles() {
 function App() {
   const [page, setPage] = useState<Page>('home');
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [, setScoreBoard] = useState<ScoreBoard>({});
+  // 【修复点 1】把之前漏掉的 scoreBoard 变量正式补回来，允许程序读取它
+  const [scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
   const [recommendedAlbum, setRecommendedAlbum] = useState<Album | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [ripplePos, setRipplePos] = useState({ x: 50, y: 50 });
@@ -54,7 +55,8 @@ function App() {
 
     setIsTransitioning(true);
     const currentQ = questions[currentQuestion];
-    const weight = currentQ.weight;
+    // 【修复点 2】防御性代码：防止 weight 未定义导致相加变成 NaN 崩溃
+    const weight = currentQ.weight || 1;
 
     setScoreBoard(prev => {
       const newBoard = { ...prev };
@@ -93,6 +95,9 @@ function App() {
     });
 
     scores.sort((a, b) => b.score - a.score);
+
+    // 【修复点 3】兜底防崩：万一库里没专辑，不至于引发前端白屏
+    if (scores.length === 0) return albums[0];
 
     const maxScore = scores[0].score;
     const topAlbums = scores.filter(s => s.score === maxScore);
@@ -205,7 +210,10 @@ function App() {
           </div>
           <h2 className="album-title">{recommendedAlbum.title}</h2>
           <h3 className="artist-name">{recommendedAlbum.artist}</h3>
-          <p className="album-comment">"{recommendedAlbum.comment}"</p>
+          
+          {/* 【修复点 4】如果你原先的库里用的是 comment 就保留 comment，如果是 description 记得对齐 */}
+          <p className="album-comment">"{recommendedAlbum.comment || recommendedAlbum.description || '暂无乐评'}"</p>
+          
           <div className="album-tags">
             {recommendedAlbum.tags.map(tag => (
               <span key={tag} className="tag">{tag}</span>
