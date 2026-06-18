@@ -20,7 +20,7 @@ function App() {
   const [page, setPage] = useState<Page>('home');
   const [currentQuestion, setCurrentQuestion] = useState(0);
   // 【修复点 1】把之前漏掉的 scoreBoard 变量正式补回来，允许程序读取它
-  const [scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
+  const [_scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
   const [recommendedAlbum, setRecommendedAlbum] = useState<Album | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [ripplePos, setRipplePos] = useState({ x: 50, y: 50 });
@@ -212,7 +212,7 @@ function App() {
           <h3 className="artist-name">{recommendedAlbum.artist}</h3>
           
           {/* 【修复点 4】如果你原先的库里用的是 comment 就保留 comment，如果是 description 记得对齐 */}
-          <p className="album-comment">"{recommendedAlbum.comment || recommendedAlbum.description || '暂无乐评'}"</p>
+          <p className="album-comment">"{recommendedAlbum.comment || '暂无乐评'}"</p>
           
           <div className="album-tags">
             {recommendedAlbum.tags.map(tag => (
