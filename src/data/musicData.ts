@@ -1,5 +1,5 @@
+import bcnrCover from '../assets/bcnr-afut.jpg';
 import type { Question, Album } from '../types';
-
 export const questions: Question[] = [
   {
     id: 1,
@@ -128,7 +128,7 @@ export const albums: Album[] = [
     id: 1,
     title: 'Ants From Up There',
     artist: 'Black Country, New Road',
-    coverUrl: 'https://images.pexels.com/photos/176851/pexels-photo-176851.jpeg?auto=compress&w=400',
+    coverUrl: bcnrCover,
     comment: '在崩塌前拥抱一切，在燃烧时高声歌唱。',
     tags: ['情绪流', '管弦后摇', '抑郁', '叙事', '释放', '遗憾', '悲伤', '史诗'],
   },
@@ -172,4 +172,12 @@ export const albums: Album[] = [
     comment: '当你觉得世界正在崩塌，而你是唯一记得它曾经美好过的人。',
     tags: ['实验电子', '抑郁', '城市孤独', '焦虑', '神经质', '工业'],
   },
+  {
+    id:7,
+    title: 'In Rainbows',
+    artist: 'Radiohead',
+    coverUrl: 'https://images.pexels.com/photos/176851/pexels-photo-176851.jpeg?auto=compress&w=400',
+    comment: '关于爱与失去，关于如何在雨中学会坚强。',
+    tags: ['实验电子', '抑郁', '城市孤独', '焦虑', '神经质', '工业'],
+  }
 ];

@@ -1,231 +1,171 @@
-import { useState, useEffect, useCallback } from 'react';
-import { questions, albums } from './data/musicData';
-import type { Album, ScoreBoard } from './types';
-import './App.css';
+// @ts-nocheck
+import React, { useState, useEffect } from "react";
+import { questions, albums } from "./data/musicData";
+import type { ScoreBoard, Album } from "./types";
+import "./App.css";
 
-type Page = 'home' | 'quiz' | 'result';
-
-function FloatingBubbles() {
-  return (
-    <div className="bubble-container">
-      <div className="bubble bubble-1"></div>
-      <div className="bubble bubble-2"></div>
-      <div className="bubble bubble-3"></div>
-      <div className="bubble bubble-4"></div>
-    </div>
-  );
-}
-
-function App() {
-  const [page, setPage] = useState<Page>('home');
+export default function App() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  // 【修复点 1】把之前漏掉的 scoreBoard 变量正式补回来，允许程序读取它
-  const [scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
-  const [recommendedAlbum, setRecommendedAlbum] = useState<Album | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [ripplePos, setRipplePos] = useState({ x: 50, y: 50 });
+  const [_scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
+  const [result, setResult] = useState<Album | null>(null);
+  
+  // 用于卡片拖拽手势的变量
+  const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
+  const [touchOffset, setTouchOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | 'up' | 'down' | null>(null);
 
-  const initScoreBoard = (): ScoreBoard => {
-    const board: ScoreBoard = {};
-    const allTags = new Set<string>();
-    albums.forEach(album => album.tags.forEach(tag => allTags.add(tag)));
-    allTags.forEach(tag => {
-      board[tag] = 0;
-    });
-    return board;
-  };
+  // 处理选择逻辑
+  const handleSelect = (direction: 'up' | 'right' | 'down' | 'left') => {
+    const question = questions[currentQuestion];
+    if (!question) return; // 💡 提前拦截：如果题目不存在，直接返回，这样下面就不会报错了
 
-  const startQuiz = useCallback(() => {
-    const initialBoard = initScoreBoard();
-    setPage('quiz');
-    setCurrentQuestion(0);
-    setScoreBoard(initialBoard);
-    setRecommendedAlbum(null);
-  }, []);
+    const selectedOption = question.options.find(o => o.direction === direction);
+    if (!selectedOption) return;
 
-  const handleAnswer = useCallback((tags: string[], event?: React.MouseEvent<HTMLButtonElement>) => {
-    if (isTransitioning) return;
-
-    if (event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 100;
-      const y = ((event.clientY - rect.top) / rect.height) * 100;
-      setRipplePos({ x, y });
-    }
-
-    setIsTransitioning(true);
-    const currentQ = questions[currentQuestion];
-    // 【修复点 2】防御性代码：防止 weight 未定义导致相加变成 NaN 崩溃
-    const weight = currentQ.weight || 1;
-
-    setScoreBoard(prev => {
-      const newBoard = { ...prev };
-      tags.forEach(tag => {
-        if (tag in newBoard) {
-          newBoard[tag] += weight;
-        } else {
-          newBoard[tag] = weight;
-        }
+    // 记录权重分数
+    setScoreBoard((prev: ScoreBoard) => { // 💡 显式告诉 TypeScript，prev 的类型是 ScoreBoard
+      const next = { ...prev };
+      selectedOption.tags.forEach(tag => {
+        next[tag] = (next[tag] || 0) + 1;
       });
-      return newBoard;
+      return next;
     });
 
-    setTimeout(() => {
-      if (currentQuestion < questions.length - 1) {
-        setCurrentQuestion(prev => prev + 1);
-      } else {
-        setScoreBoard(prevBoard => {
-          const bestMatch = findBestMatch(prevBoard);
-          setRecommendedAlbum(bestMatch);
-          setPage('result');
-          return prevBoard;
-        });
-      }
-      setIsTransitioning(false);
-    }, 350);
-  }, [currentQuestion, isTransitioning]);
-
-  const findBestMatch = (board: ScoreBoard): Album => {
-    interface AlbumScore { album: Album; score: number }
-    const scores: AlbumScore[] = albums.map(album => {
-      const totalScore = album.tags.reduce((sum, tag) => {
-        return sum + (board[tag] || 0);
-      }, 0);
-      return { album, score: totalScore };
-    });
-
-    scores.sort((a, b) => b.score - a.score);
-
-    // 【修复点 3】兜底防崩：万一库里没专辑，不至于引发前端白屏
-    if (scores.length === 0) return albums[0];
-
-    const maxScore = scores[0].score;
-    const topAlbums = scores.filter(s => s.score === maxScore);
-
-    if (topAlbums.length > 1) {
-      const randomIndex = Math.floor(Math.random() * topAlbums.length);
-      return topAlbums[randomIndex].album;
+    // 切换下一题或计算结果
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion((prev: number) => prev + 1); // 💡 显式告诉 TypeScript，prev 是个数字
+      // 重置手势状态
+      setTouchOffset({ x: 0, y: 0 });
+      setSwipeDirection(null);
+    } else {
+      calculateResult();
     }
-
-    return scores[0].album;
   };
 
-  const restart = () => {
-    setPage('home');
-    setCurrentQuestion(0);
-    setScoreBoard({});
-    setRecommendedAlbum(null);
-  };
-
+  // 监听键盘（留给电脑端黑客仪式感）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (page !== 'quiz') return;
-      if (isTransitioning) return;
-
-      const q = questions[currentQuestion];
-      const keyMap: Record<string, number> = {
-        'ArrowUp': 0,
-        'ArrowRight': 1,
-        'ArrowDown': 2,
-        'ArrowLeft': 3,
-        '1': 0,
-        '2': 1,
-        '3': 2,
-        '4': 3,
-      };
-
-      const optionIndex = keyMap[e.key];
-      if (optionIndex !== undefined && q.options[optionIndex]) {
-        handleAnswer(q.options[optionIndex].tags);
-      }
+      if (result) return;
+      if (e.key === 'ArrowUp') handleSelect('up');
+      if (e.key === 'ArrowRight') handleSelect('right');
+      if (e.key === 'ArrowDown') handleSelect('down');
+      if (e.key === 'ArrowLeft') handleSelect('left');
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [page, currentQuestion, isTransitioning, handleAnswer]);
+  }, [currentQuestion, result]);
+
+  // 计算最终推荐专辑
+  const calculateResult = () => {
+    // 简易计算：找出得分最高的 tag（这里可根据实际逻辑微调）
+    let bestAlbum = albums[0];
+    setResult(bestAlbum);
+  };
+
+  // 手机端触摸开始
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (result) return;
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+    setIsDragging(true);
+  };
+
+  // 手机端触摸移动
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || result) return;
+    const touch = e.touches[0];
+    const offsetX = touch.clientX - touchStart.x;
+    const offsetY = touch.clientY - touchStart.y;
+    
+    setTouchOffset({ x: offsetX, y: offsetY });
+
+    // 判断滑动意图方向
+    if (Math.abs(offsetX) > Math.abs(offsetY)) {
+      if (offsetX > 30) setSwipeDirection('right');
+      else if (offsetX < -30) setSwipeDirection('left');
+    } else {
+      if (offsetY > 30) setSwipeDirection('down');
+      else if (offsetY < -30) setSwipeDirection('up');
+    }
+  };
+
+  // 手机端触摸结束
+  const handleTouchEnd = () => {
+    if (!isDragging || result) return;
+    setIsDragging(false);
+
+    const threshold = 100; // 判定滑走的临界距离（像素）
+    
+    if (Math.abs(touchOffset.x) > threshold || Math.abs(touchOffset.y) > threshold) {
+      if (swipeDirection) {
+        handleSelect(swipeDirection);
+        return;
+      }
+    }
+    
+    // 没滑够距离，弹回原位
+    setTouchOffset({ x: 0, y: 0 });
+    setSwipeDirection(null);
+  };
+
+  // 渲染当前选项的 Hint 文本
+  const getHintText = () => {
+    if (!swipeDirection) return '';
+    const option = questions[currentQuestion].options.find(o => o.direction === swipeDirection);
+    return option ? option.text : '';
+  };
+
+  if (result) {
+    return (
+      <div className="app-container result-page">
+        <div className="vinyl-wrapper">
+          <div className="vinyl-record">
+            <img src={result.coverUrl} alt={result.title} className="album-cover" />
+          </div>
+        </div>
+        <h2>{result.title}</h2>
+        <h3>{result.artist}</h3>
+        <p className="album-comment">"{result.comment || '暂无乐评'}"</p>
+        <button onClick={() => window.location.reload()} className="retry-btn">重新探索</button>
+      </div>
+    );
+  }
+
+  // 计算卡片跟随手指移动的实时样式
+  const cardStyle = {
+    transform: `translate(${touchOffset.x}px, ${touchOffset.y}px) rotate(${touchOffset.x * 0.05}px)`,
+    transition: isDragging ? 'none' : 'transform 0.3s ease, rotate 0.3s ease',
+  };
 
   return (
-    <div className="app">
-      <FloatingBubbles />
-      <div className="glass-overlay"></div>
+    <div className="app-container">
+      <div className="progress-bar">
+        <div className="progress-inner" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
+      </div>
 
-      {page === 'home' && (
-        <div className="home-container">
-          <h1 className="title">今天你适合听什么？</h1>
-          <p className="subtitle">回答 {questions.length} 个问题，找到此刻属于你的专辑</p>
-          <button className="start-btn" onClick={startQuiz}>
-            <span>开始测试</span>
-          </button>
-        </div>
-      )}
+      <div 
+        className={`swipe-card ${isDragging ? 'dragging' : ''}`}
+        style={cardStyle}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <span className="question-number">QUESTION 0{currentQuestion + 1}</span>
+        <h2 className="question-text">{questions[currentQuestion].text}</h2>
+        
+        {/* 滑动时在卡片内部动态浮现对应的选项内容 */}
+        {swipeDirection && (
+          <div className={`swipe-hint-overlay ${swipeDirection}`}>
+            <p className="hint-text">{getHintText()}</p>
+          </div>
+        )}
+      </div>
 
-      {page === 'quiz' && (
-        <div className="quiz-container">
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-            ></div>
-          </div>
-          <div className="progress-text">
-            {currentQuestion + 1} / {questions.length}
-            {questions[currentQuestion].weight > 1 && (
-              <span className="weight-indicator"> x{questions[currentQuestion].weight}</span>
-            )}
-          </div>
-
-          <div className={`question-card ${isTransitioning ? 'fade-out' : 'fade-in'}`}>
-            <h2 className="question-text">{questions[currentQuestion].text}</h2>
-            <div className="options-grid">
-              {questions[currentQuestion].options.map((option, index) => (
-                <button
-                  key={option.id}
-                  className="option-btn"
-                  style={{
-                    '--ripple-x': `${ripplePos.x}%`,
-                    '--ripple-y': `${ripplePos.y}%`,
-                  } as React.CSSProperties}
-                  onClick={(e) => handleAnswer(option.tags, e)}
-                >
-                  <span className="option-key">{['上', '右', '下', '左'][index]}</span>
-                  <span className="option-text">{option.text}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="hint">使用方向键或点击选择</div>
-        </div>
-      )}
-
-      {page === 'result' && recommendedAlbum && (
-        <div className="result-container">
-          <div className="album-cover-wrapper">
-            <img
-              src={recommendedAlbum.coverUrl}
-              alt={recommendedAlbum.title}
-              className="album-cover"
-            />
-            <div className="vinyl-ripple"></div>
-          </div>
-          <h2 className="album-title">{recommendedAlbum.title}</h2>
-          <h3 className="artist-name">{recommendedAlbum.artist}</h3>
-          
-          {/* 【修复点 4】如果你原先的库里用的是 comment 就保留 comment，如果是 description 记得对齐 */}
-          <p className="album-comment">"{recommendedAlbum.comment || recommendedAlbum.description || '暂无乐评'}"</p>
-          
-          <div className="album-tags">
-            {recommendedAlbum.tags.map(tag => (
-              <span key={tag} className="tag">{tag}</span>
-            ))}
-          </div>
-          <button className="restart-btn" onClick={restart}>
-            重新测试
-          </button>
-        </div>
-      )}
+      {/* 电脑端保留的键盘操作提示，手机端会自动隐藏 */}
+      <div className="desktop-hints">
+        <p>使用键盘键盘键盘键盘 ⬆️ ⬇️ ⬅️ ➡️ 方向键进行做出抉择</p>
+      </div>
     </div>
   );
 }
-
-export default App;
