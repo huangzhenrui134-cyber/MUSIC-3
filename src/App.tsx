@@ -1,49 +1,122 @@
-// @ts-nocheck
-import React, { useState, useEffect } from "react";
-import { questions, albums } from "./data/musicData";
-import type { ScoreBoard, Album } from "./types";
-import "./App.css";
+import { useState, useEffect, useCallback } from 'react';
+import { questions, albums } from './data/musicData';
+import type { Album, ScoreBoard } from './types';
+import './App.css';
 
-export default function App() {
+type Page = 'home' | 'quiz' | 'result';
+
+function FloatingBubbles() {
+  return (
+    <div className="bubble-container">
+      <div className="bubble bubble-1"></div>
+      <div className="bubble bubble-2"></div>
+      <div className="bubble bubble-3"></div>
+      <div className="bubble bubble-4"></div>
+    </div>
+  );
+}
+
+function App() {
+  const [page, setPage] = useState<Page>('home');
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [_scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
-  const [result, setResult] = useState<Album | null>(null);
-  
-  // 用于卡片拖拽手势的变量
-  const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
-  const [touchOffset, setTouchOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | 'up' | 'down' | null>(null);
+  // 【修复点 1】把之前漏掉的 scoreBoard 变量正式补回来，允许程序读取它
+  const [scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
+  const [recommendedAlbum, setRecommendedAlbum] = useState<Album | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [ripplePos, setRipplePos] = useState({ x: 50, y: 50 });
 
-  // 处理选择逻辑
-  const handleSelect = (direction: 'up' | 'right' | 'down' | 'left') => {
-    const question = questions[currentQuestion];
-    if (!question) return; // 💡 提前拦截：如果题目不存在，直接返回，这样下面就不会报错了
+  const initScoreBoard = (): ScoreBoard => {
+    const board: ScoreBoard = {};
+    const allTags = new Set<string>();
+    albums.forEach(album => album.tags.forEach(tag => allTags.add(tag)));
+    allTags.forEach(tag => {
+      board[tag] = 0;
+    });
+    return board;
+  };
 
-    const selectedOption = question.options.find(o => o.direction === direction);
-    if (!selectedOption) return;
+  const startQuiz = useCallback(() => {
+    const initialBoard = initScoreBoard();
+    setPage('quiz');
+    setCurrentQuestion(0);
+    setScoreBoard(initialBoard);
+    setRecommendedAlbum(null);
+  }, []);
 
-    // 记录权重分数
-    setScoreBoard((prev: ScoreBoard) => { // 💡 显式告诉 TypeScript，prev 的类型是 ScoreBoard
-      const next = { ...prev };
-      selectedOption.tags.forEach(tag => {
-        next[tag] = (next[tag] || 0) + 1;
+  const handleAnswer = useCallback((tags: string[], event?: React.MouseEvent<HTMLButtonElement>) => {
+    if (isTransitioning) return;
+
+    if (event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      setRipplePos({ x, y });
+    }
+
+    setIsTransitioning(true);
+    const currentQ = questions[currentQuestion];
+    // 【修复点 2】防御性代码：防止 weight 未定义导致相加变成 NaN 崩溃
+    const weight = currentQ.weight || 1;
+
+    setScoreBoard(prev => {
+      const newBoard = { ...prev };
+      tags.forEach(tag => {
+        if (tag in newBoard) {
+          newBoard[tag] += weight;
+        } else {
+          newBoard[tag] = weight;
+        }
       });
       return next;
     });
 
-    // 切换下一题或计算结果
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion((prev: number) => prev + 1); // 💡 显式告诉 TypeScript，prev 是个数字
-      // 重置手势状态
-      setTouchOffset({ x: 0, y: 0 });
-      setSwipeDirection(null);
-    } else {
-      calculateResult();
+    setTimeout(() => {
+      if (currentQuestion < questions.length - 1) {
+        setCurrentQuestion(prev => prev + 1);
+      } else {
+        setScoreBoard(prevBoard => {
+          const bestMatch = findBestMatch(prevBoard);
+          setRecommendedAlbum(bestMatch);
+          setPage('result');
+          return prevBoard;
+        });
+      }
+      setIsTransitioning(false);
+    }, 350);
+  }, [currentQuestion, isTransitioning]);
+
+  const findBestMatch = (board: ScoreBoard): Album => {
+    interface AlbumScore { album: Album; score: number }
+    const scores: AlbumScore[] = albums.map(album => {
+      const totalScore = album.tags.reduce((sum, tag) => {
+        return sum + (board[tag] || 0);
+      }, 0);
+      return { album, score: totalScore };
+    });
+
+    scores.sort((a, b) => b.score - a.score);
+
+    // 【修复点 3】兜底防崩：万一库里没专辑，不至于引发前端白屏
+    if (scores.length === 0) return albums[0];
+
+    const maxScore = scores[0].score;
+    const topAlbums = scores.filter(s => s.score === maxScore);
+
+    if (topAlbums.length > 1) {
+      const randomIndex = Math.floor(Math.random() * topAlbums.length);
+      return topAlbums[randomIndex].album;
     }
+
+    return scores[0].album;
   };
 
-  // 监听键盘（留给电脑端黑客仪式感）
+  const restart = () => {
+    setPage('home');
+    setCurrentQuestion(0);
+    setScoreBoard({});
+    setRecommendedAlbum(null);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (result) return;
