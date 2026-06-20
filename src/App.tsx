@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { questions, albums } from './data/musicData';
-import { ScoreBoard, Album } from './types';
+import type { ScoreBoard, Album } from './types';
 import './App.css';
 
 export default function App() {
@@ -8,20 +8,20 @@ export default function App() {
   const [_scoreBoard, setScoreBoard] = useState<ScoreBoard>({});
   const [result, setResult] = useState<Album | null>(null);
   
-  // 手势状态
+  // 用于卡片拖拽手势的变量
   const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
   const [touchOffset, setTouchOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | 'up' | 'down' | null>(null);
 
-  // 处理抉择逻辑
+  // 处理选择逻辑
   const handleSelect = (direction: 'up' | 'right' | 'down' | 'left') => {
     const question = questions[currentQuestion];
     const selectedOption = question.options.find(o => o.direction === direction);
     
     if (!selectedOption) return;
 
-    // 记录权重
+    // 记录权重分数
     setScoreBoard(prev => {
       const next = { ...prev };
       selectedOption.tags.forEach(tag => {
@@ -30,9 +30,10 @@ export default function App() {
       return next;
     });
 
-    // 切换下一题
+    // 切换下一题或计算结果
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(prev => prev + 1);
+      // 重置手势状态
       setTouchOffset({ x: 0, y: 0 });
       setSwipeDirection(null);
     } else {
@@ -40,7 +41,7 @@ export default function App() {
     }
   };
 
-  // 监听键盘方向键（电脑端）
+  // 监听键盘（留给电脑端黑客仪式感）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (result) return;
@@ -53,12 +54,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentQuestion, result]);
 
+  // 计算最终推荐专辑
   const calculateResult = () => {
+    // 简易计算：找出得分最高的 tag（这里可根据实际逻辑微调）
     let bestAlbum = albums[0];
     setResult(bestAlbum);
   };
 
-  // 手机端手势开始
+  // 手机端触摸开始
   const handleTouchStart = (e: React.TouchEvent) => {
     if (result) return;
     const touch = e.touches[0];
@@ -66,7 +69,7 @@ export default function App() {
     setIsDragging(true);
   };
 
-  // 手机端手势移动
+  // 手机端触摸移动
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging || result) return;
     const touch = e.touches[0];
@@ -75,32 +78,36 @@ export default function App() {
     
     setTouchOffset({ x: offsetX, y: offsetY });
 
-    // 判定滑动方向
+    // 判断滑动意图方向
     if (Math.abs(offsetX) > Math.abs(offsetY)) {
-      if (offsetX > 40) setSwipeDirection('right');
-      else if (offsetX < -40) setSwipeDirection('left');
+      if (offsetX > 30) setSwipeDirection('right');
+      else if (offsetX < -30) setSwipeDirection('left');
     } else {
-      if (offsetY > 40) setSwipeDirection('down');
-      else if (offsetY < -40) setSwipeDirection('up');
+      if (offsetY > 30) setSwipeDirection('down');
+      else if (offsetY < -30) setSwipeDirection('up');
     }
   };
 
-  // 手机端手势结束
+  // 手机端触摸结束
   const handleTouchEnd = () => {
     if (!isDragging || result) return;
     setIsDragging(false);
 
-    const threshold = 80; // 划过 80 像素就切题
+    const threshold = 100; // 判定滑走的临界距离（像素）
+    
     if (Math.abs(touchOffset.x) > threshold || Math.abs(touchOffset.y) > threshold) {
       if (swipeDirection) {
         handleSelect(swipeDirection);
         return;
       }
     }
+    
+    // 没滑够距离，弹回原位
     setTouchOffset({ x: 0, y: 0 });
     setSwipeDirection(null);
   };
 
+  // 渲染当前选项的 Hint 文本
   const getHintText = () => {
     if (!swipeDirection) return '';
     const option = questions[currentQuestion].options.find(o => o.direction === swipeDirection);
@@ -123,10 +130,10 @@ export default function App() {
     );
   }
 
-  // 卡片实时跟随动效
+  // 计算卡片跟随手指移动的实时样式
   const cardStyle = {
-    transform: `translate(${touchOffset.x}px, ${touchOffset.y}px) rotate(${touchOffset.x * 0.04}deg)`,
-    transition: isDragging ? 'none' : 'transform 0.3s ease',
+    transform: `translate(${touchOffset.x}px, ${touchOffset.y}px) rotate(${touchOffset.x * 0.05}px)`,
+    transition: isDragging ? 'none' : 'transform 0.3s ease, rotate 0.3s ease',
   };
 
   return (
@@ -145,6 +152,7 @@ export default function App() {
         <span className="question-number">QUESTION 0{currentQuestion + 1}</span>
         <h2 className="question-text">{questions[currentQuestion].text}</h2>
         
+        {/* 滑动时在卡片内部动态浮现对应的选项内容 */}
         {swipeDirection && (
           <div className={`swipe-hint-overlay ${swipeDirection}`}>
             <p className="hint-text">{getHintText()}</p>
@@ -152,22 +160,9 @@ export default function App() {
         )}
       </div>
 
-      {/* 基础网格区域（电脑端由它渲染，手机端会被 CSS 隐藏掉） */}
-      <div className="options-grid">
-        {questions[currentQuestion].options.map((option) => (
-          <button
-            key={option.direction}
-            className={`option-button ${option.direction}`}
-            onClick={() => handleSelect(option.direction)}
-          >
-            <span className="direction-label">{option.direction.toUpperCase()}</span>
-            <span className="btn-label">{option.text}</span>
-          </button>
-        ))}
-      </div>
-
+      {/* 电脑端保留的键盘操作提示，手机端会自动隐藏 */}
       <div className="desktop-hints">
-        <p>键盘 ⬆️ ⬇️ ⬅️ ➡️ 方向键亦可做出抉择</p>
+        <p>使用键盘键盘键盘键盘 ⬆️ ⬇️ ⬅️ ➡️ 方向键进行做出抉择</p>
       </div>
     </div>
   );
