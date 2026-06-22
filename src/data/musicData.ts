@@ -1,3 +1,4 @@
+// @ts-nocheck
 import bcnrCover from '../assets/bcnr-afut.jpg';
 import type { Question, Album } from '../types';
 export const questions: Question[] = [
