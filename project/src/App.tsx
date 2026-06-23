@@ -1,165 +1,176 @@
 // @ts-nocheck
-import React, { useState, useCallback, useRef } from 'react';
-import { musicData } from './data/musicData';
+cat > /mnt/user-data/outputs/App.tsx << 'EOF'
+// @ts-nocheck
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getRandomQuestions, getRecommendedAlbum } from './data/musicData';
+import type { Question, Album } from './data/musicData';
 import './App.css';
 
 function App() {
-  const [page, setPage] = useState('welcome');
-  const [scoreBoard, setScoreBoard] = useState({});
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [recommendedAlbum, setRecommendedAlbum] = useState(null);
-  const [ripplePos, setRipplePos] = useState({ x: 0, y: 0 });
+  const [page, setPage] = useState<'welcome' | 'quiz' | 'result'>('welcome');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [recommendedAlbum, setRecommendedAlbum] = useState<Album | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [hintDirection, setHintDirection] = useState<'left' | 'right' | null>(null);
 
-  const [touchOffset, setTouchOffset] = useState(0);
-  const [swipeDirection, setSwipeDirection] = useState(null);
-  // ✅ 修复：isDragging 改为 useRef，不能用 useState 再当 .current 用
+  const dragStartX = useRef<number | null>(null);
   const isDragging = useRef(false);
-  const touchStartPos = useRef(0);
-
-  const initScoreBoard = () => {
-    const board = {};
-    musicData.forEach(album => {
-      album.tags.forEach(tag => {
-        board[tag] = 0;
-      });
-    });
-    return board;
-  };
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const startQuiz = useCallback(() => {
-    const initialBoard = initScoreBoard();
-    setPage('quiz');
-    setCurrentQuestion(0);
-    setScoreBoard(initialBoard);
+    setQuestions(getRandomQuestions());
+    setScores({});
+    setCurrentIndex(0);
     setRecommendedAlbum(null);
+    setPage('quiz');
   }, []);
 
-  const handleAnswer = useCallback((tags, event) => {
+  const answer = useCallback((isYes: boolean) => {
     if (isTransitioning) return;
+    const q = questions[currentIndex];
+    if (!q) return;
 
-    if (event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 100;
-      const y = ((event.clientY - rect.top) / rect.height) * 100;
-      setRipplePos({ x, y });
-    }
-
+    const tag = isYes ? q.yesTag : q.noTag;
+    const newScores = { ...scores, [tag]: (scores[tag] || 0) + 1 };
+    setScores(newScores);
     setIsTransitioning(true);
 
     setTimeout(() => {
-      const newScoreBoard = { ...scoreBoard };
-      tags.forEach(tag => {
-        newScoreBoard[tag] = (newScoreBoard[tag] || 0) + 1;
-      });
-      setScoreBoard(newScoreBoard);
-
-      const nextQuestion = currentQuestion + 1;
-      // ✅ 修复：题目总数应该从 questions 字段读，而不是 musicData[0].questions
-      //    如果你的数据结构里题目是独立的 questions 数组，请按实际调整
-      const totalQuestions = musicData.length;
-
-      if (nextQuestion < totalQuestions) {
-        setCurrentQuestion(nextQuestion);
+      const next = currentIndex + 1;
+      if (next < questions.length) {
+        setCurrentIndex(next);
+        setDragOffset(0);
+        setHintDirection(null);
         setIsTransitioning(false);
       } else {
-        let maxScore = -1;
-        let bestAlbum = musicData[0];
-
-        musicData.forEach(album => {
-          let score = 0;
-          album.tags.forEach(tag => {
-            score += newScoreBoard[tag] || 0;
-          });
-          if (score > maxScore) {
-            maxScore = score;
-            bestAlbum = album;
-          }
-        });
-
-        setRecommendedAlbum(bestAlbum);
+        const album = getRecommendedAlbum(newScores);
+        setRecommendedAlbum(album);
         setPage('result');
         setIsTransitioning(false);
       }
-    }, 600);
-  }, [currentQuestion, scoreBoard, isTransitioning]);
+    }, 350);
+  }, [isTransitioning, questions, currentIndex, scores]);
 
   const restart = () => {
     setPage('welcome');
-    setScoreBoard({});
-    setCurrentQuestion(0);
-    setRecommendedAlbum(null);
+    setDragOffset(0);
+    setHintDirection(null);
   };
 
-  const handleTouchStart = (e) => {
+  // 键盘方向键
+  useEffect(() => {
+    if (page !== 'quiz') return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') answer(true);
+      if (e.key === 'ArrowLeft') answer(false);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [page, answer]);
+
+  // 鼠标拖动
+  const onMouseDown = (e: React.MouseEvent) => {
     isDragging.current = true;
-    touchStartPos.current = e.touches[0].clientX;
+    dragStartX.current = e.clientX;
   };
 
-  const handleTouchMove = (e) => {
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || dragStartX.current === null) return;
+    const diff = e.clientX - dragStartX.current;
+    setDragOffset(diff);
+    if (diff > 40) setHintDirection('right');
+    else if (diff < -40) setHintDirection('left');
+    else setHintDirection(null);
+  };
+
+  const onMouseUp = () => {
     if (!isDragging.current) return;
-    const currentX = e.touches[0].clientX;
-    const diff = currentX - touchStartPos.current;
-    setTouchOffset(diff);
-    if (diff > 50) setSwipeDirection('right');
-    else if (diff < -50) setSwipeDirection('left');
-    else setSwipeDirection(null);
-  };
-
-  const handleTouchEnd = () => {
     isDragging.current = false;
-    if (swipeDirection === 'left') {
-      handleAnswer(['experimental', 'post-rock']);
-    } else if (swipeDirection === 'right') {
-      handleAnswer(['chamber-pop', 'indie']);
-    }
-    setTouchOffset(0);
-    setSwipeDirection(null);
+    if (dragOffset > 80) answer(true);
+    else if (dragOffset < -80) answer(false);
+    else { setDragOffset(0); setHintDirection(null); }
+    dragStartX.current = null;
   };
 
-  const handleSelect = (direction) => {
-    if (direction === 'left') handleAnswer(['experimental', 'post-rock']);
-    if (direction === 'right') handleAnswer(['chamber-pop', 'indie']);
+  // 触摸滑动
+  const onTouchStart = (e: React.TouchEvent) => {
+    dragStartX.current = e.touches[0].clientX;
+    isDragging.current = true;
   };
 
-  const currentAlbumData = musicData[currentQuestion];
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current || dragStartX.current === null) return;
+    const diff = e.touches[0].clientX - dragStartX.current;
+    setDragOffset(diff);
+    if (diff > 40) setHintDirection('right');
+    else if (diff < -40) setHintDirection('left');
+    else setHintDirection(null);
+  };
+
+  const onTouchEnd = () => {
+    isDragging.current = false;
+    if (dragOffset > 80) answer(true);
+    else if (dragOffset < -80) answer(false);
+    else { setDragOffset(0); setHintDirection(null); }
+    dragStartX.current = null;
+  };
+
+  const q = questions[currentIndex];
+  const rotation = dragOffset * 0.04;
 
   return (
-    <div className="app-container">
+    <div className="app-container" onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
       {page === 'welcome' && (
         <div className="welcome-card">
-          <h1>音乐风格倾向测试</h1>
-          <button onClick={startQuiz}>开始探索</button>
+          <h1>今天的音乐</h1>
+          <p>10个问题，找到现在最适合你的专辑</p>
+          <button onClick={startQuiz}>开始</button>
         </div>
       )}
 
-      {page === 'quiz' && currentAlbumData && (
+      {page === 'quiz' && q && (
         <div className="quiz-container">
-          <div
-            className={`swipe-card ${swipeDirection || ''} ${isTransitioning ? 'fade-out' : ''}`}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            style={{ transform: `translateX(${touchOffset}px) rotate(${touchOffset * 0.05}deg)` }}
-          >
-            <img src={`/src/assets/${currentAlbumData.cover}`} alt="Cover" className="album-cover" />
-            <h3>{currentAlbumData.title}</h3>
-            <p>{currentAlbumData.artist}</p>
+          <div className="progress-bar-wrap">
+            <div className="progress-bar" style={{ width: `${(currentIndex / questions.length) * 100}%` }} />
           </div>
-          <div className="actions">
-            <button onClick={() => handleSelect('left')}>不喜欢 (左滑)</button>
-            <button onClick={() => handleSelect('right')}>喜欢 (右滑)</button>
+          <div className="progress-text">{currentIndex + 1} / {questions.length}</div>
+
+          <div className="card-row">
+            <span className={`arrow-hint left ${hintDirection === 'left' ? 'active' : ''}`}>←</span>
+
+            <div
+              ref={cardRef}
+              className={`swipe-card ${hintDirection || ''} ${isTransitioning ? 'fade-out' : ''}`}
+              style={{ transform: `translateX(${dragOffset}px) rotate(${rotation}deg)` }}
+              onMouseDown={onMouseDown}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+            >
+              <p className="question-text">{q.text}</p>
+            </div>
+
+            <span className={`arrow-hint right ${hintDirection === 'right' ? 'active' : ''}`}>→</span>
+          </div>
+
+          <div className="swipe-labels">
+            <span>否</span>
+            <span>是</span>
           </div>
         </div>
       )}
 
       {page === 'result' && recommendedAlbum && (
         <div className="result-card">
-          <h2>为你推荐的专辑：</h2>
-          <img src={`/src/assets/${recommendedAlbum.cover}`} alt="Result Cover" className="album-cover" />
-          <h3>{recommendedAlbum.title}</h3>
-          <p>{recommendedAlbum.artist}</p>
-          <button onClick={restart}>再试一次</button>
+          <p className="result-label">现在适合你的</p>
+          <img src={recommendedAlbum.coverUrl} alt={recommendedAlbum.title} className="album-cover" />
+          <h2>{recommendedAlbum.title}</h2>
+          <p className="artist">{recommendedAlbum.artist}</p>
+          <p className="comment">{recommendedAlbum.comment}</p>
+          <button onClick={restart}>再来一次</button>
         </div>
       )}
     </div>
@@ -167,3 +178,4 @@ function App() {
 }
 
 export default App;
+EOF
