@@ -127,7 +127,7 @@ export const albums: Album[] = [
     id: 1,
     title: 'Ants From Up There',
     artist: 'Black Country, New Road',
-    coverUrl: 'https://images.pexels.com/photos/167092/pexels-photo-167092.jpeg?auto=compress&w=400',
+    coverUrl: 'https://img2.doubanio.com/view/subject/m/public/s34016261.jpg',
     comment: '在崩塌前拥抱一切，在燃烧时高声歌唱。',
     tags: ['I', 'F', 'J', '旋律性', '实验性'],
   },
