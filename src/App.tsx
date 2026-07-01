@@ -1,6 +1,4 @@
 // @ts-nocheck
-cat > /mnt/user-data/outputs/App.tsx << 'EOF'
-// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getRandomQuestions, getRecommendedAlbum } from './data/musicData';
 import type { Question, Album } from './data/musicData';
@@ -178,4 +176,3 @@ function App() {
 }
 
 export default App;
-EOF
