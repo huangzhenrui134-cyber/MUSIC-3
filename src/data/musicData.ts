@@ -119,6 +119,9 @@ export function getRandomQuestions(): Question[] {
 
 // ==================== 专辑库 ====================
 
+// @ts-nocheck
+// ... 保持前面的 DimensionTag, Question 接口以及问题库不变 ...
+
 export const albums: Album[] = [
   {
     id: 1,
@@ -156,7 +159,7 @@ export const albums: Album[] = [
     id: 5,
     title: 'In Rainbows',
     artist: 'Radiohead',
-    coverUrl: 'https://images.pexels.com/photos/176851/pexels-photo-176851.jpeg?auto=compress&w=400',
+    coverUrl: 'https://images.pexels.com/photos/210922/pexels-photo-210922.jpeg?auto=compress&w=400',
     comment: '雨里有一种温柔，是OK Computer里没有的。',
     tags: ['I', 'F', 'P', '旋律性', '实验性'],
   },
@@ -164,7 +167,7 @@ export const albums: Album[] = [
     id: 6,
     title: 'Lift Your Skinny Fists Like Antennas to Heaven',
     artist: 'Godspeed You! Black Emperor',
-    coverUrl: 'https://images.pexels.com/photos/밤하늘/pexels-photo-355465.jpeg?auto=compress&w=400',
+    coverUrl: 'https://images.pexels.com/photos/355465/pexels-photo-355465.jpeg?auto=compress&w=400',
     comment: '没有歌词，但每一分钟都在说话。',
     tags: ['I', 'T', 'P', '实验性'],
   },
@@ -204,7 +207,7 @@ export const albums: Album[] = [
     id: 11,
     title: 'Yankee Hotel Foxtrot',
     artist: 'Wilco',
-    coverUrl: 'https://images.pexels.com/photos/凤凰城/pexels-photo-325185.jpeg?auto=compress&w=400',
+    coverUrl: 'https://images.pexels.com/photos/325185/pexels-photo-325185.jpeg?auto=compress&w=400',
     comment: '在美国的废墟里找到一种奇怪的美。',
     tags: ['E', 'T', 'P', '实验性', '旋律性'],
   },
@@ -223,8 +226,10 @@ export const albums: Album[] = [
     coverUrl: 'https://images.pexels.com/photos/210922/pexels-photo-210922.jpeg?auto=compress&w=400',
     comment: '原始的、愤怒的、完全不想取悦任何人的。',
     tags: ['E', 'F', 'J', '节奏性'],
-  },
+  }
 ];
+
+// ... 保持最后的 getRecommendedAlbum 推荐算法不变 ...
 
 // ==================== 推荐算法 ====================
 
