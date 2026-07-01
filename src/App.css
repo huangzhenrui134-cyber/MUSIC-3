@@ -157,10 +157,13 @@ button:hover {
   width: 100%;
 }
 
-.swipe-card p {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0 0 12px 0;
+.swipe-card {
+  /* ... 保留你原有的其他基础样式 ... */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* ➔ 改为 center，让所有元素向中间靠拢 */
+  gap: 15px; /* ➔ 让封面、歌名和问题方块之间自动留出 15px 的均匀间距 */
 }
 
 .question-text {
@@ -170,13 +173,18 @@ button:hover {
   line-height: 1.5;
   font-weight: 500;
   background: rgba(0, 0, 0, 0.3);
-  padding: 12px 16px;
+  padding: 16px;
   border-radius: 14px;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
+  
+  /* ➔ 核心添加：利用 Flex 布局让长短文本在方块内部彻底垂直居中 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100px; /* 给它一个基础高度，防止文本太短时方块显得太憋 */
 }
-
 /* 方向指示箭头提示 */
 .arrow-hint {
   font-size: 1.5rem;
