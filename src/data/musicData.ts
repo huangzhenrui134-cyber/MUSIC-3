@@ -239,4 +239,3 @@ export function getRecommendedAlbum(scores: Record<string, number>): Album {
   // 并列时随机推一张
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
-EOF
