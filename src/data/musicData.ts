@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/musicData.ts << 'EOF'
 // @ts-nocheck
 
 export type DimensionTag = 'E' | 'I' | 'T' | 'F' | 'J' | 'P' | '节奏性' | '实验性' | '旋律性';
